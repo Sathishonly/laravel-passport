@@ -20,9 +20,7 @@ use Illuminate\Support\Str;
 
 Route::post('register', [UserController::class, 'register']);
 Route::post('login', [UserController::class, 'login']);
-Route::post('refreshtoken', [UserController::class, 'refreshtoken']);
 Route::middleware('auth:api')->group(function () {
-    Route::get('image', [UserController::class, 'getimage']);
-    Route::post('image-upload', [ UserController::class, 'imageUploadPost' ]);
-    Route::post('logic', [UserController::class, 'logic_check']);
+    Route::post('refreshtoken', [UserController::class, 'refreshtoken']);
+    Route::post('logout', [UserController::class, 'logout']);
 });
