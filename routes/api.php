@@ -23,4 +23,6 @@ Route::post('login', [UserController::class, 'login']);
 Route::middleware('auth:api')->group(function () {
     Route::post('refreshtoken', [UserController::class, 'refreshtoken']);
     Route::post('logout', [UserController::class, 'logout']);
+    Route::post('forgotpassword', [UserController::class, 'forgotpassword']);
+    Route::post('resetpassword', [UserController::class, 'resetpassword']);
 });
