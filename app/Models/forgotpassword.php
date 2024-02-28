@@ -11,5 +11,5 @@ class forgotpassword extends Model
     protected $connection = 'mongodb';
     protected $collection = 'forgotpassword';
 
-    protected $fillable = ['email', 'code'];
+    protected $fillable = ['email', 'otp'];
 }

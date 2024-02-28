@@ -19,26 +19,28 @@ class UserController extends Controller
         $validation = Validator::make($input, [
             'name' => 'required',
             'email' => 'required|email',
-            'password' => 'required',
+            'password' => [
+                'required',
+                'min:8',
+                'max:16',
+                'regex:/^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]+$/'
+            ]
         ]);
         if ($validation->fails()) {
             return response()->json(['error' => $validation->errors(), 'status_code' => 400], 400);
         } else {
-
             $user = User::create([
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password)
             ]);
 
-            $token = $user->createToken('Laravel8PassportAuth')->accessToken;
+            $token = $user->createToken('LaravelPassportAuth')->accessToken;
             return response()->json(['status_code' => 200, 'token' => $token]);
         }
     }
 
-    /**
-     * Login Req
-     */
+
     public function login(Request $request)
     {
         $input = $request->all();
@@ -52,7 +54,7 @@ class UserController extends Controller
             $user = User::where('email', $request->email)->first();
             if ($user) {
                 if (Hash::check($request->password, $user->password)) {
-                    $token = $user->createToken('Laravel8PassportAuth')->accessToken;
+                    $token = $user->createToken('LaravelPassportAuth')->accessToken;
                     return response()->json(['status_code' => 200, 'token' => $token]);
                 } else {
                     return response()->json(['status_code' => 400, "error_code" => "Password mismatch"]);
@@ -68,7 +70,7 @@ class UserController extends Controller
     public function refreshToken(Request $request)
     {
         $user = Auth::user();
-        $token = $user->createToken('Laravel8PassportAuth');
+        $token = $user->createToken('LaravelPassportAuth');
         $accessToken = $token->accessToken;
 
         return response()->json([
@@ -87,7 +89,8 @@ class UserController extends Controller
     }
 
 
-    public function forgotpassword(Request $request)
+    //sent otp for forgotpassword 
+    public function sentotpforgotpassword(Request $request)
     {
         require base_path("vendor/autoload.php");
         $mail = new PHPMailer(true);
@@ -98,126 +101,154 @@ class UserController extends Controller
         ]);
 
         if ($validation->fails()) {
-            return response()->json(['error' => $validation->errors(), 'status_code' => 400], 400);
+            $errors = $validation->errors()->first();
+            return response()->json(['error_code' => $errors, 'status_code' => 400]);
         } else {
-
             $email = $request->input('email');
 
-            $user = User::where("email", $email)->first();
-
+            $user = User::where('email', $email)->first();
             if ($user) {
+                $otp = mt_rand(100000, 999999);
 
                 try {
-
-                    $code = mt_rand(100000000, 999999999);
-                    $link = "http://127.0.0.1:8000/resetPassword.html?id=" . $code;
+                    $existingOTP = forgotpassword::where('email', $email)->first();
+                    if ($existingOTP) {
+                        $existingOTP->delete();
+                    }
                     $mail->SMTPDebug = 0;
                     $mail->isSMTP();
                     $mail->Host = 'smtp.gmail.com'; //  smtp host
                     $mail->SMTPAuth = true;
-
-
                     $mail->Username = 'example@gmail.com'; //  sender username
                     $mail->Password = '*******'; // sender password
-
-
-
                     $mail->SMTPSecure = 'tls'; // encryption - ssl/tls
                     $mail->Port = 587; // port - 587/465
-
                     $mail->setFrom('example@gmail.com', 'Forgot Password');
-
-                    //$mail->addCC($request->emailCc);
-                    //$mail->addBCC($request->emailBcc);
-
-                    //   $mail->addReplyTo('sender-reply-email', 'sender-reply-name');
-
+                    $mail->addAddress($email);
                     $mail->isHTML(true); // Set email content format to HTML
-
                     $mail->Subject = 'Forgot Password';
                     $mail->Body = '<html>
-                <head>
-                <style>
-                @import url("https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700&display=swap");
-              </style>
-            </head>
-             <body>
-            <div style="width:65%; padding: 10px;">
-            <div>
-                <section  style="background-color: white;">
+                    <head>
+                    <style>
+                    @import url("https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700&display=swap");
+                  </style>
+                </head>
+                 <body>
+                <div style="width:65%; padding: 10px;">
+                <div>
+                    <section  style="background-color: white;">
+                        <p style="font-size:12pt; margin: 15px 0px 0px 0px; font-family: \'Assistant\', sans-serif;" class="mt-5">Your OTP is ' . $otp . ' to complete the verification process.</p>
+                        <p style="font-size:12pt; margin: 15px 0px 0px 0px; font-family: \'Assistant\', sans-serif;" class="mt-5">Enter the OTP in the designated field to proceed with your application.</p>
+                        <p style="font-size:12pt;margin: 15px 0px 0px 0px;  font-family: \'Assistant\', sans-serif;" class="mt-3">Best regards,</p>
+                        <p style="font-size:12pt;font-size:12pt;margin:0px; padding-top: 0px; font-family: \'Assistant\', sans-serif;">Team</p>
+                    </section>
+                    <footer">
+                    <span style="font-size:12pt;margin: 0px; font-family: \'Assistant\', sans-serif;"><a style="color:blue;" target="_blank" href="https://www.google.com/">www.google.com</a> </span>
+                </footer>
+                </div>
+               </div>
+                </body>
 
-                <p style="font-size:12pt; margin: 15px 0px 0px 0px; font-family: \'Assistant\', sans-serif;" class="mt-5">Hi,</p>
-
-                    <p style="font-size:12pt; margin: 15px 0px 0px 0px; font-family: \'Assistant\', sans-serif;" class="mt-5">Please click the link ' . $link . ' to reset your password.</p>
-
-					<p style="font-size:12pt;margin: 15px 0px 0px 0px;  font-family: \'Assistant\', sans-serif;" class="mt-3">Best regards,</p>
-
-                    <p style="font-size:12pt;font-size:12pt;margin:0px; padding-top: 0px; font-family: \'Assistant\', sans-serif;">Team</p>
-
-				</section>
-
-                <footer">
-                <span style="font-size:12pt;margin: 0px; font-family: \'Assistant\', sans-serif;"><a style="color:blue;" target="_blank" href="https://www.google.com/">www.google.com</a> </span>
-            </footer>
-            </div>
-           </div>
-            </body>
-
-            </html>';
-                    $mail->AddAddress($user['email']);
+                </html>';
                     $mail->send();
-
-
                     $otpEntry = forgotpassword::create([
-                        'email' => $user['email'],
-                        'code' => $code,
+                        'email' => $email,
+                        'otp' => $otp,
                     ]);
-
                     return response()->json([
                         'status_code' => 200,
-                        'message' => 'Reset password link have sent successfully',
+                        'message' => 'OTP sent successfully, please check your inbox.',
                     ]);
-
                 } catch (\Exception $e) {
                     return response()->json([
                         'error' => 'Failed to send OTP',
-                        'error_message' => $e->getMessage(),
+                        'error_code' => $e->getMessage(),
                     ], 500);
                 }
-
             } else {
                 return response()->json([
-                    'message' => 'Invalid emailID',
-                    'status_code' => 400
-                ], 400);
+                    'status_code' => 400,
+                    'message' => "We couldn't find this email",
+                ]);
+            }
+
+        }
+    }
+
+
+    //verify otp for forgotpassword
+    public function verifyotpresetpassword(Request $request)
+    {
+        $input = $request->all();
+        $validation = Validator::make($input, [
+            'email' => 'required|email',
+            'otp' => 'required',
+        ]);
+
+        if ($validation->fails()) {
+            $errors = [];
+            $messageBag = $validation->errors();
+            foreach ($messageBag->keys() as $fieldKey) {
+                $errors = $messageBag->first($fieldKey);
+                break;
+            }
+            return response()->json(['error_code' => $errors, 'status_code' => 400]);
+        } else {
+            $otp = (int) $request->input('otp');
+            $email = $request->email;
+
+            $forgetpassword = forgotpassword::where('email', $email)->first();
+            if (!$forgetpassword) {
+                return response()->json([
+                    'status_code' => 400,
+                    'error_code' => 'Invalid OTP',
+                ]);
+            }
+            if ($otp == $forgetpassword->otp) {
+                return response()->json(['status_code' => 200, 'message' => "OTP Verified"]);
+            } else {
+                return response()->json([
+                    'status_code' => 400,
+                    'error_code' => 'Invalid OTP',
+                ]);
             }
         }
     }
 
-    
+
+    //reset password for user
     public function resetpassword(Request $request)
     {
         $input = $request->all();
         $validation = Validator::make($input, [
-            'code' => 'required',
-            'password' => 'required|required_with:confirmpassword|same:confirmpassword',
-            'confirmpassword' => 'required',
+            'email' => 'required|email',
+            'otp' => 'required',
+            'password' => [
+                'required',
+                'min:8',
+                'max:16',
+                'regex:/^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]+$/'
+            ]
         ]);
 
         if ($validation->fails()) {
             return response()->json(['error' => $validation->errors(), 'status_code' => 400], 400);
         } else {
-            $code = $request->input('code');
+            $otp = $request->input('otp');
             $password = $request->input('password');
-            $confirmpassword = $request->input('confirmpassword');
-
-            $forgotpassword = forgotpassword::where("code", $code)->first();
+            $email = $request->email;
+            $forgotpassword = forgotpassword::where("otp", $otp)->first();
+            if (!$forgotpassword) {
+                return response()->json([
+                    'status_code' => 400,
+                    'error_code' => 'Invalid OTP',
+                ]);
+            }
 
             if ($forgotpassword) {
-                $useremail = $forgotpassword->email;
+                $forgotpassword->delete();
                 $passwordhash = Hash::make($password);
-
-                User::where('email', $useremail)
+                User::where('email', $email)
                     ->update(['password' => $passwordhash]);
 
                 return response()->json([
@@ -229,6 +260,38 @@ class UserController extends Controller
                     'message' => 'Invalid Link',
                     'status_code' => 400
                 ], 400);
+            }
+        }
+    }
+
+
+    //change password
+    public function changepassword(Request $request)
+    {
+        $input = $request->all();
+
+        $validation = Validator::make($input, [
+            'userId' => 'required',
+            'oldpassword' => 'required',
+            'newpassword' => 'required|same:confirmpassword',
+            'confirmpassword' => 'required',
+        ]);
+        if ($validation->fails()) {
+            return response()->json(['error' => $validation->errors(), 'status_code' => 400]);
+        } else {
+            $userId = $input['userId'];
+            $user = User::find($userId);
+            if (!$user) {
+                return response()->json(['error' => 'User not found', 'status_code' => 301]);
+            }
+
+            if (!Hash::check($input['oldpassword'], $user->password)) {
+                return response()->json(['error' => 'Incorrect old password', 'status_code' => 401]);
+            } else {
+                $newPasswordHash = Hash::make($input['newpassword']);
+                $user->password = $newPasswordHash;
+                $user->save();
+                return response()->json(['message' => 'Password changed successfully', 'status_code' => 200]);
             }
         }
     }
