@@ -13,10 +13,20 @@ use PHPMailer\PHPMailer\PHPMailer;
 class UserController extends Controller
 {
 
+    protected $user;
+    protected $forgotpassword;
+    protected $validator;
+
+    public function __construct(User $user, forgotpassword $forgotpassword,Validator $validator)
+    {
+        $this->user = $user;
+        $this->forgotpassword = $forgotpassword;
+        $this->validator = $validator;
+    }
     public function register(Request $request)
     {
         $input = $request->all();
-        $validation = Validator::make($input, [
+        $validation = $this->validator::make($input, [
             'name' => 'required',
             'email' => 'required|email',
             'password' => [
@@ -25,11 +35,18 @@ class UserController extends Controller
                 'max:16',
                 'regex:/^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]+$/'
             ]
+        ], [
+            'name.required' => 'Please enter your name.',
+            'email.required' => 'Please enter your email address.',
+            'email.email' => 'Please enter a valid email address.',
+            'password.required' => 'Please enter your password.',
         ]);
+        
         if ($validation->fails()) {
-            return response()->json(['error' => $validation->errors(), 'status_code' => 400], 400);
+            $errors = $validation->errors()->first();
+            return response()->json(['status_code' => 400, 'error_code' => $errors]);
         } else {
-            $user = User::create([
+            $user = $this->user::create([
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password)
@@ -44,14 +61,24 @@ class UserController extends Controller
     public function login(Request $request)
     {
         $input = $request->all();
-        $validation = Validator::make($input, [
+        if (empty($input['email']) && empty($input['password'])) {
+            return response()->json(['status_code' => 400, 'error_code' => 'Please enter your Email Address and password.']);
+        }
+
+        $validation = $this->validator::make($input, [
             'email' => 'required|email',
             'password' => 'required',
+        ], [
+            'email.required' => 'Please enter your email address.',
+            'email.email' => 'Please enter a valid email address.',
+            'password.required' => 'Please enter your password.',
         ]);
+
         if ($validation->fails()) {
-            return response()->json(['error' => $validation->errors(), 'status_code' => 400], 400);
+            $errors = $validation->errors()->first();
+            return response()->json(['status_code' => 400, 'error_code' => $errors]);
         } else {
-            $user = User::where('email', $request->email)->first();
+            $user = $this->user::where('email', $request->email)->first();
             if ($user) {
                 if (Hash::check($request->password, $user->password)) {
                     $token = $user->createToken('LaravelPassportAuth')->accessToken;
@@ -96,36 +123,39 @@ class UserController extends Controller
         $mail = new PHPMailer(true);
 
         $input = $request->all();
-        $validation = Validator::make($input, [
-            'email' => 'required',
+        $validation = $this->validator::make($input, [
+            'email' => 'required |email',
+        ], [
+            'email.required' => 'Please enter your email address.',
+            'email.email' => 'Please enter a valid email address.',
         ]);
 
         if ($validation->fails()) {
             $errors = $validation->errors()->first();
-            return response()->json(['error_code' => $errors, 'status_code' => 400]);
+            return response()->json(['status_code' => 400, 'error_code' => $errors]);
         } else {
             $email = $request->input('email');
 
-            $user = User::where('email', $email)->first();
+            $user = $this->user::where('email', $email)->first();
             if ($user) {
                 $otp = mt_rand(100000, 999999);
 
                 try {
-                    $existingOTP = forgotpassword::where('email', $email)->first();
+                    $existingOTP = $this->forgotpassword::where('email', $email)->first();
                     if ($existingOTP) {
                         $existingOTP->delete();
                     }
                     $mail->SMTPDebug = 0;
                     $mail->isSMTP();
-                    $mail->Host = 'smtp.gmail.com'; //  smtp host
+                    $mail->Host = 'smtp.gmail.com';
                     $mail->SMTPAuth = true;
-                    $mail->Username = 'example@gmail.com'; //  sender username
-                    $mail->Password = '*******'; // sender password
-                    $mail->SMTPSecure = 'tls'; // encryption - ssl/tls
-                    $mail->Port = 587; // port - 587/465
+                    $mail->Username = 'example@gmail.com';
+                    $mail->Password = '*******';
+                    $mail->SMTPSecure = 'tls';
+                    $mail->Port = 587;
                     $mail->setFrom('example@gmail.com', 'Forgot Password');
                     $mail->addAddress($email);
-                    $mail->isHTML(true); // Set email content format to HTML
+                    $mail->isHTML(true);
                     $mail->Subject = 'Forgot Password';
                     $mail->Body = '<html>
                     <head>
@@ -151,7 +181,7 @@ class UserController extends Controller
 
                 </html>';
                     $mail->send();
-                    $otpEntry = forgotpassword::create([
+                    $otpEntry = $this->forgotpassword::create([
                         'email' => $email,
                         'otp' => $otp,
                     ]);
@@ -180,9 +210,13 @@ class UserController extends Controller
     public function verifyotpresetpassword(Request $request)
     {
         $input = $request->all();
-        $validation = Validator::make($input, [
+        $validation = $this->validator::make($input, [
             'email' => 'required|email',
             'otp' => 'required',
+        ], [
+            'email.required' => 'Please enter your email address.',
+            'email.email' => 'Please enter a valid email address.',
+            'otp.required' => 'Please enter your otp.',
         ]);
 
         if ($validation->fails()) {
@@ -197,7 +231,7 @@ class UserController extends Controller
             $otp = (int) $request->input('otp');
             $email = $request->email;
 
-            $forgetpassword = forgotpassword::where('email', $email)->first();
+            $forgetpassword = $this->forgotpassword::where('email', $email)->first();
             if (!$forgetpassword) {
                 return response()->json([
                     'status_code' => 400,
@@ -220,7 +254,7 @@ class UserController extends Controller
     public function resetpassword(Request $request)
     {
         $input = $request->all();
-        $validation = Validator::make($input, [
+        $validation = $this->validator::make($input, [
             'email' => 'required|email',
             'otp' => 'required',
             'password' => [
@@ -229,15 +263,21 @@ class UserController extends Controller
                 'max:16',
                 'regex:/^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]+$/'
             ]
+        ], [
+            'email.required' => 'Please enter your email address.',
+            'email.email' => 'Please enter a valid email address.',
+            'otp.required' => 'Please enter your otp.',
+            'password.required' => 'Please enter your password.',
         ]);
 
         if ($validation->fails()) {
-            return response()->json(['error' => $validation->errors(), 'status_code' => 400], 400);
+            $errors = $validation->errors()->first();
+            return response()->json(['status_code' => 400, 'error_code' => $errors]);
         } else {
             $otp = $request->input('otp');
             $password = $request->input('password');
             $email = $request->email;
-            $forgotpassword = forgotpassword::where("otp", $otp)->first();
+            $forgotpassword = $this->forgotpassword::where("otp", $otp)->first();
             if (!$forgotpassword) {
                 return response()->json([
                     'status_code' => 400,
@@ -248,7 +288,7 @@ class UserController extends Controller
             if ($forgotpassword) {
                 $forgotpassword->delete();
                 $passwordhash = Hash::make($password);
-                User::where('email', $email)
+                $this->user::where('email', $email)
                     ->update(['password' => $passwordhash]);
 
                 return response()->json([
@@ -269,24 +309,31 @@ class UserController extends Controller
     public function changepassword(Request $request)
     {
         $input = $request->all();
-
-        $validation = Validator::make($input, [
+        $validation = $this->validator::make($input, [
             'userId' => 'required',
             'oldpassword' => 'required',
             'newpassword' => 'required|same:confirmpassword',
             'confirmpassword' => 'required',
+        ], [
+            'userId.required' => 'UserId is required.',
+            'oldpassword.required' => 'Please enter your old password.',
+            'newpassword.required' => 'Please enter your new password.',
+            'newpassword.same' => 'The new password and confirm password must match.',
+            'confirmpassword.required' => 'Please confirm your new password.',
         ]);
+        
         if ($validation->fails()) {
-            return response()->json(['error' => $validation->errors(), 'status_code' => 400]);
+            $errors = $validation->errors()->first();
+            return response()->json(['status_code' => 400, 'error_code' => $errors]);
         } else {
             $userId = $input['userId'];
-            $user = User::find($userId);
+            $user = $this->user::find($userId);
             if (!$user) {
-                return response()->json(['error' => 'User not found', 'status_code' => 301]);
+                return response()->json(['error' => 'User not found', 'status_code' => 400]);
             }
 
             if (!Hash::check($input['oldpassword'], $user->password)) {
-                return response()->json(['error' => 'Incorrect old password', 'status_code' => 401]);
+                return response()->json(['error' => 'Incorrect old password', 'status_code' => 400]);
             } else {
                 $newPasswordHash = Hash::make($input['newpassword']);
                 $user->password = $newPasswordHash;
